@@ -92,16 +92,30 @@ func sendContainerList(bot *tgbotapi.BotAPI, chatid int64, messageid int, cli *c
 	message := "Container List\n"
 
 	for _, container := range containers {
-		fmt.Println("ID: ", container.ID)
-		message += "ID: " + container.ID + "\n"
+		message += "ID: " + container.ID[:10] + "\n"
 	}
 
 	sendMessage(bot, chatid, messageid, message)
 }
 
+func stopAllContainer(ctx context.Context, bot *tgbotapi.BotAPI, chatid int64, messageid int, cli *client.Client) {
+	containers, err := cli.ContainerList(ctx, types.ContainerListOptions{})
+	if err != nil {
+		panic(err)
+	}
+
+	for _, container := range containers {
+		if err := cli.ContainerStop(ctx, container.ID, nil); err != nil {
+			panic(err)
+		}
+		message := "Container " + container.ID[:10] + " stopped."
+		sendMessage(bot, chatid, messageid, message)
+	}
+}
+
 func main() {
 	//Docker SDK init
-	//ctx := context.Background()
+	ctx := context.Background()
 	cli := initDockerSDK()
 
 	//Telegram Bot init
@@ -118,6 +132,8 @@ func main() {
 				startMessage(bot, update.Message.Chat.ID, update.Message.MessageID)
 			case "/list":
 				sendContainerList(bot, update.Message.Chat.ID, update.Message.MessageID, cli)
+			case "/stopall":
+				stopAllContainer(ctx, bot, update.Message.Chat.ID, update.Message.MessageID, cli)
 			}
 
 		} else {
