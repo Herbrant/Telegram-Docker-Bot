@@ -71,19 +71,24 @@ func initDockerSDK() *client.Client {
 	return cli
 }
 
-func sendMessage(bot *tgbotapi.BotAPI, chatid int64, messageid int, message string) {
+func replyMessage(bot *tgbotapi.BotAPI, chatid int64, messageid int, message string) {
 	msg := tgbotapi.NewMessage(chatid, message)
 	msg.ReplyToMessageID = messageid
 	bot.Send(msg)
 }
 
-func startMessage(bot *tgbotapi.BotAPI, chatid int64, messageid int) {
-	welcome := "Docker Telegram Bot is a bot to manage your docker container in your machine!"
-	welcome += "If you want to know what you can do, use /help command."
-	sendMessage(bot, chatid, messageid, welcome)
+func sendMessage(bot *tgbotapi.BotAPI, chatid int64, message string) {
+	msg := tgbotapi.NewMessage(chatid, message)
+	bot.Send(msg)
 }
 
-func sendContainerList(bot *tgbotapi.BotAPI, chatid int64, messageid int, cli *client.Client) {
+func startMessage(bot *tgbotapi.BotAPI, chatid int64) {
+	welcome := "Docker Telegram Bot is a bot to manage your docker container in your machine!"
+	welcome += "If you want to know what you can do, use /help command."
+	sendMessage(bot, chatid, welcome)
+}
+
+func sendContainersList(bot *tgbotapi.BotAPI, chatid int64, cli *client.Client) {
 	containers, err := cli.ContainerList(context.Background(), types.ContainerListOptions{})
 	if err != nil {
 		panic(err)
@@ -95,10 +100,10 @@ func sendContainerList(bot *tgbotapi.BotAPI, chatid int64, messageid int, cli *c
 		message += "ID: " + container.ID[:10] + "\n"
 	}
 
-	sendMessage(bot, chatid, messageid, message)
+	sendMessage(bot, chatid, message)
 }
 
-func stopAllContainer(ctx context.Context, bot *tgbotapi.BotAPI, chatid int64, messageid int, cli *client.Client) {
+func stopAllContainer(ctx context.Context, bot *tgbotapi.BotAPI, chatid int64, cli *client.Client) {
 	containers, err := cli.ContainerList(ctx, types.ContainerListOptions{})
 	if err != nil {
 		panic(err)
@@ -109,8 +114,21 @@ func stopAllContainer(ctx context.Context, bot *tgbotapi.BotAPI, chatid int64, m
 			panic(err)
 		}
 		message := "Container " + container.ID[:10] + " stopped."
-		sendMessage(bot, chatid, messageid, message)
+		sendMessage(bot, chatid, message)
 	}
+}
+
+func sendImagesList(bot *tgbotapi.BotAPI, chatid int64, cli *client.Client) {
+	images, err := cli.ImageList(context.Background(), types.ImageListOptions{})
+	if err != nil {
+		panic(err)
+	}
+	message := "List Images\n"
+	for _, image := range images {
+		message += image.ID + "\n"
+	}
+
+	sendMessage(bot, chatid, message)
 }
 
 func main() {
@@ -129,11 +147,13 @@ func main() {
 
 			switch update.Message.Text {
 			case "/start":
-				startMessage(bot, update.Message.Chat.ID, update.Message.MessageID)
-			case "/list":
-				sendContainerList(bot, update.Message.Chat.ID, update.Message.MessageID, cli)
+				startMessage(bot, update.Message.Chat.ID)
+			case "/listcontainer":
+				sendContainersList(bot, update.Message.Chat.ID, cli)
 			case "/stopall":
-				stopAllContainer(ctx, bot, update.Message.Chat.ID, update.Message.MessageID, cli)
+				stopAllContainer(ctx, bot, update.Message.Chat.ID, cli)
+			case "/listimage":
+				sendImagesList(bot, update.Message.Chat.ID, cli)
 			}
 
 		} else {
