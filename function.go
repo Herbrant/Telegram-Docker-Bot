@@ -2,6 +2,9 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
 	"log"
 	"strconv"
 
@@ -9,6 +12,30 @@ import (
 	"github.com/docker/docker/client"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
 )
+
+//TelegramConfig rappresents configuration parameters for telegram bot
+type TelegramConfig struct {
+	TOKEN, USERID string
+}
+
+func initConfig() TelegramConfig {
+	data, err := ioutil.ReadFile("./config/config.json")
+	if err != nil {
+		fmt.Println("error:", err)
+	}
+
+	var config TelegramConfig
+
+	err = json.Unmarshal(data, &config)
+
+	if err != nil {
+		fmt.Println("error:", err)
+	}
+
+	fmt.Println("TOKEN: ", config.TOKEN)
+	fmt.Println("USERID: ", config.USERID)
+	return config
+}
 
 func initTelegramBot() (int64, *tgbotapi.BotAPI, tgbotapi.UpdatesChannel) {
 	config := initConfig()
@@ -52,6 +79,7 @@ func replyMessage(bot *tgbotapi.BotAPI, chatid int64, messageid int, message str
 
 func sendMessage(bot *tgbotapi.BotAPI, chatid int64, message string) {
 	msg := tgbotapi.NewMessage(chatid, message)
+	msg.ParseMode = "markdown"
 	bot.Send(msg)
 }
 
@@ -67,10 +95,13 @@ func sendContainersList(bot *tgbotapi.BotAPI, chatid int64, cli *client.Client) 
 		panic(err)
 	}
 
-	message := "Container List\n"
+	message := "*Container List*\n"
 
 	for _, container := range containers {
-		message += "ID: " + container.ID[:10] + "\n"
+		message += "*Name*: " + container.Names[0][1:]
+		message += " *Image*: " + container.Image
+		message += " *Status*: " + container.State
+		message += "\n"
 	}
 
 	sendMessage(bot, chatid, message)
@@ -102,4 +133,30 @@ func sendImagesList(bot *tgbotapi.BotAPI, chatid int64, cli *client.Client) {
 	}
 
 	sendMessage(bot, chatid, message)
+}
+
+func stopContainer(bot *tgbotapi.BotAPI, chatid int64, cli *client.Client) {
+	var row []tgbotapi.KeyboardButton
+	var msg tgbotapi.MessageConfig
+
+	containers, err := cli.ContainerList(context.Background(), types.ContainerListOptions{})
+	if err != nil {
+		panic(err)
+	}
+
+	for _, container := range containers {
+		row = append(row, tgbotapi.NewKeyboardButton(container.ID[:10]))
+	}
+
+	if row == nil {
+		msg = tgbotapi.NewMessage(chatid, "No container available.")
+	} else {
+		var Keyboard = tgbotapi.NewReplyKeyboard(
+			row,
+		)
+		msg = tgbotapi.NewMessage(chatid, "Select a container")
+		msg.ReplyMarkup = Keyboard
+	}
+
+	bot.Send(msg)
 }
